@@ -14,7 +14,10 @@ from flask_apscheduler import APScheduler
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'a_very_secure_secret_key_for_the_final_version'
 basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'tro_system.db')
+# เชื่อมต่อกับฐานข้อมูล PostgreSQL บน Render
+# โดยดึง URL มาจาก Environment Variable ที่ Render ตั้งให้
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
