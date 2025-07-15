@@ -3,6 +3,7 @@ import threading
 import json
 import requests
 import configparser
+import logging
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
@@ -183,19 +184,5 @@ def expiring_insurance():
     return render_template('expiring_insurance.html', customers=expiring_list)
 
 
-# --- 6. Main Execution ---
-if __name__ == '__main__':
-    with app.app_context():
-        if not os.path.exists(os.path.join(basedir, 'tro_system.db')):
-            print("Creating database...")
-            db.create_all()
-    
-    # ตั้งค่าให้ Scheduler รันฟังก์ชัน check_and_notify_customers ทุกวันตอน 9 โมงเช้า
-    scheduler.add_job(id='Daily Customer Notification', func=check_and_notify_customers, trigger='cron', hour=9, minute=0)
-    scheduler.init_app(app)
-    scheduler.start()
-    
-    # รันเว็บเซิร์ฟเวอร์
-    # app.run(debug=False, port=5001)
-    app.run(debug=False)
+
 
