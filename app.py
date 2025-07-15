@@ -1,6 +1,5 @@
 # Force redeploy
 import os
-import threading
 import json
 import requests
 import configparser
@@ -10,127 +9,145 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_apscheduler import APScheduler
 
-# --- 1. App Initialization and Configuration ---
+# --- เพิ่มการ import สำหรับ LINE SDK ---
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import MessageEvent, TextMessage, FollowEvent
+
+# --- 1. การตั้งค่า App และฐานข้อมูล ---
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'a_very_secure_secret_key_for_the_final_version'
 basedir = os.path.abspath(os.path.dirname(__file__))
 # เชื่อมต่อกับฐานข้อมูล PostgreSQL บน Render
-# โดยดึง URL มาจาก Environment Variable ที่ Render ตั้งให้
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
-
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 scheduler = APScheduler()
 
-# --- 2. Database Model Definition (No changes) ---
+# --- 2. อ่านค่า Config และตั้งค่า LINE Bot ---
+config = configparser.ConfigParser()
+config.read('config.ini')
+LINE_CHANNEL_ACCESS_TOKEN = config.get('LINE_API', 'Channel_Access_Token', fallback=None)
+LINE_CHANNEL_SECRET = config.get('LINE_API', 'Channel_Secret', fallback=None)
+
+# ตรวจสอบว่ามี Token และ Secret หรือไม่ก่อนสร้าง instance
+if LINE_CHANNEL_ACCESS_TOKEN and LINE_CHANNEL_SECRET:
+    line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
+    handler = WebhookHandler(LINE_CHANNEL_SECRET)
+else:
+    print("WARNING: LINE Channel Access Token or Secret is not configured in config.ini")
+    line_bot_api = None
+    handler = None
+
+# --- 3. Database Model (ไม่เปลี่ยนแปลง) ---
 class Customer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    phone = db.Column(db.String(20), nullable=False)
+    phone = db.Column(db.String(20), nullable=False, unique=True)
     plate = db.Column(db.String(50), nullable=False)
     service = db.Column(db.String(100))
     service_date = db.Column(db.Date)
     prb_expiry = db.Column(db.Date, nullable=True)
     ins_expiry = db.Column(db.Date, nullable=True)
-    line_user_id = db.Column(db.String(100), nullable=True)
+    line_user_id = db.Column(db.String(100), nullable=True, unique=True)
 
     @property
     def prb_days_left(self):
-        if self.prb_expiry:
-            return (self.prb_expiry - datetime.now().date()).days
+        if self.prb_expiry: return (self.prb_expiry - datetime.now().date()).days
         return None
-
     @property
     def ins_days_left(self):
-        if self.ins_expiry:
-            return (self.ins_expiry - datetime.now().date()).days
+        if self.ins_expiry: return (self.ins_expiry - datetime.now().date()).days
         return None
 
-# --- 3. LINE Messaging API Functions ---
-def send_push_message(user_id, message_text):
-    """ฟังก์ชันสำหรับส่งข้อความหาลูกค้าผ่าน Messaging API"""
-    config = configparser.ConfigParser()
-    config.read('config.ini')
-    token = config.get('LINE_API', 'Channel_Access_Token', fallback=None)
-
-    if not token or token == 'YOUR_TOKEN_HERE':
-        print("ERROR: ยังไม่ได้ตั้งค่า Channel Access Token ในไฟล์ config.ini")
-        return False
-
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {token}'
-    }
-    payload = {
-        "to": user_id,
-        "messages": [{"type": "text", "text": message_text}]
-    }
-    
+# --- 4. Webhook Endpoint และ Event Handlers ---
+@app.route("/callback", methods=['POST'])
+def callback():
+    if not handler:
+        return "LINE bot not configured.", 500
+        
+    signature = request.headers['X-Line-Signature']
+    body = request.get_data(as_text=True)
+    app.logger.info("Request body: " + body)
     try:
-        response = requests.post('https://api.line.me/v2/bot/message/push', headers=headers, data=json.dumps(payload))
-        if response.status_code == 200:
-            return True
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        return "Invalid signature.", 400
+    return 'OK'
+
+@handler.add(FollowEvent)
+def handle_follow(event):
+    """ทำงานเมื่อมีผู้ใช้ใหม่เพิ่มเพื่อน"""
+    user_id = event.source.user_id
+    print(f"New user followed: {user_id}")
+    welcome_message = (
+        "ขอบคุณที่เพิ่มเพื่อนกับ ตรอ. SK-Service ครับ!\n\n"
+        "เพื่อรับบริการแจ้งเตือน พ.ร.บ./ประกันหมดอายุอัตโนมัติ "
+        "กรุณาพิมพ์เบอร์โทรศัพท์ 10 หลักที่ท่านใช้ลงทะเบียนกับทางร้านส่งเข้ามาในแชทนี้ได้เลยครับ"
+    )
+    line_bot_api.reply_message(event.reply_token, TextMessage(text=welcome_message))
+
+@handler.add(MessageEvent, message=TextMessage)
+def handle_message(event):
+    """ทำงานเมื่อผู้ใช้ส่งข้อความเข้ามา"""
+    user_id = event.source.user_id
+    text = event.message.text.strip()
+    
+    if text.isdigit() and len(text) >= 9:
+        customer = Customer.query.filter_by(phone=text).first()
+        if customer:
+            customer.line_user_id = user_id
+            db.session.commit()
+            reply_message = f"ลงทะเบียนสำเร็จ!\n\nบัญชี LINE ของคุณได้ผูกกับข้อมูลคุณ {customer.name} (ทะเบียน: {customer.plate}) เรียบร้อยแล้ว"
+            line_bot_api.reply_message(event.reply_token, TextMessage(text=reply_message))
         else:
-            print(f"Error sending to {user_id}: {response.status_code} - {response.text}")
-            return False
+            reply_message = "ไม่พบข้อมูลลูกค้าสำหรับเบอร์โทรศัพท์นี้ครับ กรุณาตรวจสอบอีกครั้ง"
+            line_bot_api.reply_message(event.reply_token, TextMessage(text=reply_message))
+    else:
+        reply_message = "กรุณาส่งเฉพาะตัวเลขเบอร์โทรศัพท์ 10 หลักเพื่อทำการลงทะเบียนนะครับ"
+        line_bot_api.reply_message(event.reply_token, TextMessage(text=reply_message))
+
+# --- 5. Scheduled Job และ LINE Pusher ---
+def send_push_message(user_id, message_text):
+    if not line_bot_api:
+        print("Cannot send push message, LINE bot not configured.")
+        return False
+    try:
+        line_bot_api.push_message(user_id, TextMessage(text=message_text))
+        return True
     except Exception as e:
         print(f"Exception while sending to {user_id}: {e}")
         return False
 
-# --- 4. Scheduled Job ---
 def check_and_notify_customers():
-    """
-    ฟังก์ชันหลักที่จะรันอัตโนมัติทุกวัน
-    เพื่อตรวจสอบและส่งแจ้งเตือนให้ลูกค้า
-    """
     print(f"[{datetime.now()}] Running daily check for notifications...")
     with app.app_context():
         customers = Customer.query.filter(Customer.line_user_id != None, Customer.line_user_id != '').all()
-        
         for customer in customers:
             message_to_send = None
-            
-            # ตรวจสอบเงื่อนไข พ.ร.บ. (แจ้งเตือนที่ 30, 15, 7, และ 1 วันก่อนหมดอายุ)
             if customer.prb_days_left in [30, 15, 7, 1]:
-                message_to_send = (
-                    f"เรียนคุณ {customer.name},\n\n"
-                    f"แจ้งเตือนจาก ตรอ. SK-Service ครับ 🔔\n"
-                    f"พ.ร.บ. ทะเบียนรถ {customer.plate} ของท่านจะหมดอายุในอีก {customer.prb_days_left} วัน "
-                    f"(วันที่ {customer.prb_expiry.strftime('%d-%m-%Y')})\n\n"
-                    f"สามารถเข้ามาต่อ พ.ร.บ. ล่วงหน้าที่ร้านได้เลยนะครับ"
-                )
-            
-            # ตรวจสอบเงื่อนไข ประกัน (แจ้งเตือนที่ 90, 60, 30 วันก่อนหมดอายุ)
+                message_to_send = f"เรียนคุณ {customer.name},\n\nแจ้งเตือนจาก ตรอ. 🔔\nพ.ร.บ. ทะเบียนรถ {customer.plate} ของท่านจะหมดอายุในอีก {customer.prb_days_left} วัน (วันที่ {customer.prb_expiry.strftime('%d-%m-%Y')})\n\nสามารถเข้ามาต่อ พ.ร.บ. ล่วงหน้าที่ร้านได้เลยนะครับ"
             elif customer.ins_days_left in [90, 60, 30]:
-                 message_to_send = (
-                    f"เรียนคุณ {customer.name},\n\n"
-                    f"แจ้งเตือนจาก ตรอ. SK-Service ครับ 🔔\n"
-                    f"ประกันภัยรถยนต์ทะเบียน {customer.plate} ของท่านจะหมดอายุในอีก {customer.ins_days_left} วัน "
-                    f"(วันที่ {customer.ins_expiry.strftime('%d-%m-%Y')})\n\n"
-                    f"ติดต่อสอบถามเบี้ยประกันราคาพิเศษได้ที่ร้านเลยนะครับ"
-                )
-
+                message_to_send = f"เรียนคุณ {customer.name},\n\nแจ้งเตือนจาก ตรอ. 🔔\nประกันภัยรถยนต์ทะเบียน {customer.plate} ของท่านจะหมดอายุในอีก {customer.ins_days_left} วัน (วันที่ {customer.ins_expiry.strftime('%d-%m-%Y')})\n\nติดต่อสอบถามเบี้ยประกันราคาพิเศษได้เลยนะครับ"
             if message_to_send:
                 success = send_push_message(customer.line_user_id, message_to_send)
                 status = "SUCCESS" if success else "FAILED"
-                print(f"  - Notifying {customer.name} ({customer.line_user_id}): {status}")
+                print(f"  - Notifying {customer.name}: {status}")
     print("Daily check finished.")
 
-
-# --- 5. Routes and Context Processor (No major changes) ---
+# --- 6. Routes and Context Processor ---
 @app.context_processor
 def inject_notification_counts():
     prb_alert_count = db.session.query(Customer).filter(Customer.prb_expiry != None, Customer.prb_expiry <= datetime.now().date() + timedelta(days=30)).count()
     ins_alert_count = db.session.query(Customer).filter(Customer.ins_expiry != None, Customer.ins_expiry <= datetime.now().date() + timedelta(days=90)).count()
     return dict(prb_alert_count=prb_alert_count, ins_alert_count=ins_alert_count)
 
-# ... (All routes like index, add, edit, delete, expiring_prb, expiring_insurance are the same as before) ...
+# ... (All other routes like index, add, edit, delete are the same) ...
 @app.route('/')
 def index():
     customers = Customer.query.order_by(Customer.id.desc()).all()
     return render_template('index.html', customers=customers)
-
 @app.route('/add', methods=['GET', 'POST'])
 def add_customer():
     if request.method == 'POST':
@@ -147,7 +164,6 @@ def add_customer():
         flash('เพิ่มข้อมูลลูกค้าเรียบร้อยแล้ว', 'success')
         return redirect(url_for('index'))
     return render_template('add.html')
-
 @app.route('/edit/<int:customer_id>', methods=['GET', 'POST'])
 def edit_customer(customer_id):
     customer = db.session.get(Customer, customer_id)
@@ -165,7 +181,6 @@ def edit_customer(customer_id):
         flash('แก้ไขข้อมูลลูกค้าเรียบร้อยแล้ว', 'success')
         return redirect(url_for('index'))
     return render_template('edit.html', customer=customer)
-
 @app.route('/delete/<int:customer_id>', methods=['POST'])
 def delete_customer(customer_id):
     customer = db.session.get(Customer, customer_id)
@@ -174,27 +189,32 @@ def delete_customer(customer_id):
         db.session.commit()
         flash('ลบข้อมูลลูกค้าเรียบร้อยแล้ว', 'success')
     return redirect(url_for('index'))
-
 @app.route('/expiring-prb')
 def expiring_prb():
     thirty_days_from_now = datetime.now().date() + timedelta(days=30)
     expiring_list = db.session.query(Customer).filter(Customer.prb_expiry != None, Customer.prb_expiry <= thirty_days_from_now).order_by(Customer.prb_expiry.asc()).all()
     return render_template('expiring_prb.html', customers=expiring_list)
-
 @app.route('/expiring-insurance')
 def expiring_insurance():
     ninety_days_from_now = datetime.now().date() + timedelta(days=90)
     expiring_list = db.session.query(Customer).filter(Customer.ins_expiry != None, Customer.ins_expiry <= ninety_days_from_now).order_by(Customer.ins_expiry.asc()).all()
     return render_template('expiring_insurance.html', customers=expiring_list)
 
-
-# เพิ่มฟังก์ชันนี้เข้าไป
+# --- 7. Custom CLI Command for build script ---
 @app.cli.command("db-create")
 def db_create():
     """คำสั่งสำหรับสร้างตารางในฐานข้อมูล"""
     db.create_all()
     print("Database tables created!")
 
+# --- 8. Main Execution for Gunicorn on Render ---
+# ตั้งค่า Scheduler ให้ทำงานเมื่อรันผ่าน Gunicorn
+if __name__ != '__main__':
+    scheduler.add_job(id='Daily Customer Notification', func=check_and_notify_customers, trigger='cron', hour=9, minute=0, timezone='Asia/Bangkok')
+    scheduler.init_app(app)
+    scheduler.start()
+
+# ส่วนนี้จะไม่ได้ใช้เมื่อ Deploy บน Render แต่มีไว้สำหรับรันบนเครื่องตัวเอง
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
 
