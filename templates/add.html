@@ -1,0 +1,75 @@
+{% extends "layout.html" %}
+{% block title %}เพิ่มข้อมูลลูกค้า{% endblock %}
+{% block content %}
+<style>
+    .form-container { max-width: 500px; margin: auto; padding: 20px; }
+    h2 { text-align: center; color: #0056b3; }
+    label { display: block; margin-bottom: 8px; font-weight: bold; }
+    input[type="text"], input[type="date"] { width: 100%; padding: 10px; margin-bottom: 20px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+    .btn-submit { width: 100%; padding: 12px; background-color: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; }
+</style>
+<div class="form-container">
+    <h2>➕ เพิ่มข้อมูลลูกค้าใหม่</h2>
+    <form method="post">
+        <label for="name">ชื่อลูกค้า:</label>
+        <input type="text" id="name" name="name" required>
+        <label for="phone">เบอร์โทรติดต่อ:</label>
+        <input type="text" id="phone" name="phone" required>
+        <label for="plate">ทะเบียนรถ:</label>
+        <input type="text" id="plate" name="plate" required>
+        <label for="service">บริการที่ใช้:</label>
+        <input type="text" id="service" name="service" value="ตรวจสภาพรถ">
+        <label for="service_date">วันที่ใช้บริการ:</label>
+        <input type="date" id="service_date" name="service_date">
+        <label for="prb_expiry">วันหมดอายุ พ.ร.บ.:</label>
+        <input type="date" id="prb_expiry" name="prb_expiry">
+        <label for="ins_expiry">วันหมดอายุ ประกันภัย:</label>
+        <input type="date" id="ins_expiry" name="ins_expiry">
+        <label for="line_user_id" style="color: #00B900;">LINE User ID (ถ้ามี):</label>
+        <input type="text" id="line_user_id" name="line_user_id">
+        <button type="submit" class="btn-submit">บันทึกข้อมูล</button>
+    </form>
+</div>
+
+<!-- เพิ่ม JavaScript สำหรับจัดการวันที่ -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const serviceDateInput = document.getElementById('service_date');
+        const prbExpiryInput = document.getElementById('prb_expiry');
+        const insExpiryInput = document.getElementById('ins_expiry');
+
+        // ฟังก์ชันสำหรับแปลง Date object เป็น YYYY-MM-DD
+        function toISODateString(date) {
+            return date.getFullYear() + '-' +
+                   ('0' + (date.getMonth() + 1)).slice(-2) + '-' +
+                   ('0' + date.getDate()).slice(-2);
+        }
+
+        // ฟังก์ชันสำหรับอัปเดตวันหมดอายุ
+        function updateExpiryDates() {
+            if (serviceDateInput.value) {
+                // สร้าง Date object จากวันที่ใช้บริการ
+                // เพิ่มส่วนเวลาเข้าไปเพื่อแก้ปัญหา Timezone ที่อาจทำให้วันที่เพี้ยนไป 1 วัน
+                const serviceDate = new Date(serviceDateInput.value + 'T00:00:00');
+                
+                // เพิ่มไป 1 ปี
+                const expiryDate = new Date(serviceDate.setFullYear(serviceDate.getFullYear() + 1));
+                const expiryDateString = toISODateString(expiryDate);
+                
+                prbExpiryInput.value = expiryDateString;
+                insExpiryInput.value = expiryDateString;
+            }
+        }
+
+        // 1. ตั้งค่าวันที่ปัจจุบันเป็นค่าเริ่มต้นสำหรับ "วันที่ใช้บริการ"
+        const today = new Date();
+        serviceDateInput.value = toISODateString(today);
+
+        // 2. เรียกใช้ฟังก์ชันเพื่อตั้งค่าวันหมดอายุเริ่มต้นทันที
+        updateExpiryDates();
+
+        // 3. เพิ่ม Event Listener เพื่อให้วันหมดอายุเปลี่ยนตาม "วันที่ใช้บริการ" ที่ผู้ใช้เลือก
+        serviceDateInput.addEventListener('change', updateExpiryDates);
+    });
+</script>
+{% endblock %}

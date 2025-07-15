@@ -1,0 +1,102 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    หน้าหลัก - ระบบจัดการลูกค้า ตรอ.
+{% endblock %}
+
+{% block content %}
+<style>
+    /* สไตล์สำหรับตารางและปุ่มต่างๆ */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        font-size: 16px;
+    }
+    th, td {
+        border: 1px solid #dee2e6;
+        padding: 12px 15px;
+        text-align: left;
+        vertical-align: middle;
+    }
+    th {
+        background-color: #007bff;
+        color: white;
+        font-weight: bold;
+    }
+    tr:nth-child(even) {
+        background-color: #f8f9fa;
+    }
+    tr:hover {
+        background-color: #e9ecef;
+    }
+    .actions-cell {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .btn-action {
+        font-family: 'Sarabun', sans-serif;
+        font-size: 14px;
+        padding: 5px 12px;
+        text-decoration: none;
+        border-radius: 5px;
+        color: white;
+        border: none;
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+    .btn-action:hover {
+        opacity: 0.85;
+    }
+    .btn-edit {
+        background-color: #ffc107;
+        color: #212529;
+    }
+    .btn-delete {
+        background-color: #dc3545;
+    }
+</style>
+
+<h2>👥 ข้อมูลลูกค้าทั้งหมด</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>ชื่อลูกค้า</th>
+            <th>เบอร์โทร</th>
+            <th>ทะเบียนรถ</th>
+            <th>วันหมดอายุ พ.ร.บ.</th>
+            <th>วันหมดอายุ ประกัน</th>
+            <th style="width: 15%;">การจัดการ</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for customer in customers %}
+        <tr>
+            <td>{{ customer.name }}</td>
+            <td>{{ customer.phone }}</td>
+            <td>{{ customer.plate }}</td>
+            <!-- ใช้ strftime เพื่อจัดรูปแบบวันที่ และตรวจสอบก่อนว่ามีข้อมูลหรือไม่ -->
+            <td>{{ customer.prb_expiry.strftime('%d-%m-%Y') if customer.prb_expiry else '-' }}</td>
+            <td>{{ customer.ins_expiry.strftime('%d-%m-%Y') if customer.ins_expiry else '-' }}</td>
+            <td class="actions-cell">
+                <!-- ปุ่มแก้ไข -->
+                <a href="{{ url_for('edit_customer', customer_id=customer.id) }}" class="btn-action btn-edit">แก้ไข</a>
+                
+                <!-- ปุ่มลบจะอยู่ในฟอร์ม เพื่อส่งเป็น POST request -->
+                <form action="{{ url_for('delete_customer', customer_id=customer.id) }}" method="post" onsubmit="return confirm('คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลของ {{ customer.name }}?');" style="display: inline;">
+                    <button type="submit" class="btn-action btn-delete">ลบ</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="6" style="text-align: center; padding: 20px; color: #6c757d;">
+                ยังไม่มีข้อมูลลูกค้าในระบบ
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

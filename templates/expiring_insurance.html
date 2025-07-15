@@ -1,0 +1,83 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    รายงาน ประกันใกล้หมดอายุ
+{% endblock %}
+
+{% block content %}
+<style>
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    th, td {
+        border: 1px solid #dee2e6;
+        padding: 12px;
+        text-align: left;
+    }
+    th {
+        background-color: #17a2b8;
+        color: white;
+    }
+    .status-expired {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    .status-warning {
+        color: #e09900;
+        font-weight: bold;
+    }
+    .btn-back {
+        display: inline-block;
+        margin-top: 25px;
+        padding: 10px 20px;
+        background-color: #6c757d;
+        color: white;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: bold;
+        transition: background-color 0.2s;
+    }
+    .btn-back:hover {
+        background-color: #5a6268;
+    }
+</style>
+
+<h2>📄 รายงาน: ประกันหมดอายุ หรือ ใกล้หมดอายุ (ภายใน 90 วัน)</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>ชื่อลูกค้า</th>
+            <th>เบอร์โทร</th>
+            <th>ทะเบียนรถ</th>
+            <th>วันหมดอายุประกัน</th>
+            <th>สถานะ (วัน)</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for customer in customers %}
+        <tr>
+            <td>{{ customer.name }}</td>
+            <td>{{ customer.phone }}</td>
+            <td>{{ customer.plate }}</td>
+            <td>{{ customer.ins_expiry.strftime('%d-%m-%Y') if customer.ins_expiry else '-' }}</td>
+            <td class="{{ 'status-expired' if customer.ins_days_left < 0 else 'status-warning' }}">
+                {{ customer.ins_days_left }}
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="5" style="text-align: center; padding: 20px;">
+                ไม่มีรายการที่เข้าเงื่อนไข
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- ปุ่มย้อนกลับที่เพิ่มเข้ามาใหม่ -->
+<a href="{{ url_for('index') }}" class="btn-back">&larr; กลับหน้าหลัก</a>
+
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% block title %}แก้ไขข้อมูลลูกค้า{% endblock %}
+{% block content %}
+<style>
+    .form-container { max-width: 500px; margin: auto; }
+    label { display: block; margin-bottom: 8px; font-weight: bold; }
+    input[type="text"], input[type="date"] { width: 100%; padding: 10px; margin-bottom: 20px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+    .btn-submit { width: 100%; padding: 12px; background-color: #ffc107; color: #212529; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; }
+</style>
+<div class="form-container">
+    <h2>✏️ แก้ไขข้อมูล: {{ customer.name }}</h2>
+    <form method="post">
+        <label for="name">ชื่อลูกค้า:</label>
+        <input type="text" id="name" name="name" value="{{ customer.name }}" required>
+        <label for="phone">เบอร์โทรติดต่อ:</label>
+        <input type="text" id="phone" name="phone" value="{{ customer.phone }}" required>
+        <label for="plate">ทะเบียนรถ:</label>
+        <input type="text" id="plate" name="plate" value="{{ customer.plate }}" required>
+        <label for="service">บริการที่ใช้:</label>
+        <input type="text" id="service" name="service" value="{{ customer.service or '' }}">
+        <label for="service_date">วันที่ใช้บริการ:</label>
+        <input type="date" id="service_date" name="service_date" value="{{ customer.service_date.strftime('%Y-%m-%d') if customer.service_date }}">
+        <label for="prb_expiry">วันหมดอายุ พ.ร.บ.:</label>
+        <input type="date" id="prb_expiry" name="prb_expiry" value="{{ customer.prb_expiry.strftime('%Y-%m-%d') if customer.prb_expiry }}">
+        <label for="ins_expiry">วันหมดอายุ ประกันภัย:</label>
+        <input type="date" id="ins_expiry" name="ins_expiry" value="{{ customer.ins_expiry.strftime('%Y-%m-%d') if customer.ins_expiry }}">
+        <label for="line_user_id" style="color: #00B900;">LINE User ID (ถ้ามี):</label>
+        <input type="text" id="line_user_id" name="line_user_id" value="{{ customer.line_user_id or '' }}">
+        <button type="submit" class="btn-submit">บันทึกการเปลี่ยนแปลง</button>
+    </form>
+</div>
+{% endblock %}

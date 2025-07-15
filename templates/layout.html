@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ระบบจัดการลูกค้า ตรอ.{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: auto; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; flex-wrap: wrap; }
+        .header-title a { text-decoration: none; color: #0056b3; }
+        .header-actions { display: flex; align-items: center; gap: 15px; }
+        .notification-area { display: flex; align-items: center; gap: 20px; }
+        .notification-bell { position: relative; display: flex; align-items: center; text-decoration: none; color: #555; }
+        .notification-bell svg { width: 24px; height: 24px; }
+        .notification-badge { position: absolute; top: -8px; right: -10px; background-color: #dc3545; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; font-weight: bold; border: 2px solid white; }
+        .bell-label { margin-left: 8px; font-size: 14px; font-weight: bold; }
+        .btn-add { display: inline-block; background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+        .flash-message { padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+        .flash-success { background-color: #d4edda; color: #155724; }
+        .flash-error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-title">
+                <h1><a href="{{ url_for('index') }}">📋 ระบบจัดการลูกค้า ตรอ.</a></h1>
+            </div>
+            <div class="header-actions">
+                <div class="notification-area">
+                    <a href="{{ url_for('expiring_prb') }}" class="notification-bell">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+                        <span class="bell-label" style="color: #e0a800;">พ.ร.บ.</span>
+                        {% if prb_alert_count > 0 %}<span class="notification-badge" style="background-color: #ffc107;">{{ prb_alert_count }}</span>{% endif %}
+                    </a>
+                    <a href="{{ url_for('expiring_insurance') }}" class="notification-bell">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+                        <span class="bell-label" style="color: #17a2b8;">ประกัน</span>
+                        {% if ins_alert_count > 0 %}<span class="notification-badge" style="background-color: #17a2b8;">{{ ins_alert_count }}</span>{% endif %}
+                    </a>
+                </div>
+                <a href="{{ url_for('add_customer') }}" class="btn-add">➕ เพิ่มข้อมูลลูกค้าใหม่</a>
+            </div>
+        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>
