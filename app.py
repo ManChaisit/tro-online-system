@@ -188,5 +188,13 @@ def expiring_insurance():
     return render_template('expiring_insurance.html', customers=expiring_list)
 
 
+# เพิ่มฟังก์ชันนี้เข้าไป
+@app.cli.command("db-create")
+def db_create():
+    """คำสั่งสำหรับสร้างตารางในฐานข้อมูล"""
+    db.create_all()
+    print("Database tables created!")
 
+if __name__ == '__main__':
+    app.run(debug=True, port=5001)
 
